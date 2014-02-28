@@ -12,6 +12,7 @@ TestResults
 *.suo
 *.user
 *.sln.docstates
+TwitterCredential.fs
 
 # Build results
 [Dd]ebug/

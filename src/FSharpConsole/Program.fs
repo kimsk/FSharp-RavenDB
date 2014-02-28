@@ -2,30 +2,72 @@
 open Raven.Client
 open Raven.Client.Document
 open Raven.Client.Linq
+open System.Linq
+open Twitter
 
-type Person = {        
-        FirstName : string
-        LastName : string
-    }
+open LinqToTwitter
+open TwitterContext
 
-type PersonWithId = {
-        mutable Id : string
-        FirstName : string
-        LastName : string
-    }
+let getTweetsByScreenName screenName batches = 
+        
+    let getTweets maxId = 
+        let tweets = 
+            let q = 
+                ctx.Status
+                    .Where(fun s -> s.Type = StatusType.User && s.ScreenName = screenName && s.Count = 200)
+                
+            if maxId <> UInt64.MaxValue then
+                q.Where(fun s -> s.MaxID = maxId)   
+            else
+                q
+        tweets
+        |> List.ofSeq
+        |> List.rev
+    
+    let getAllTweets (acc : Status list) _ =        
+        let maxId = 
+            if acc = [] then UInt64.MaxValue
+            else 
+                (acc
+                 |> List.head
+                 |> (fun s -> s.StatusID)) - 1UL
+        
+        let tweets = (getTweets maxId) @ acc
+        printfn "total: %d maxId: %d"  tweets.Length maxId
+        tweets
+    
+    [ 0..batches ] |> List.fold getAllTweets []
+
+let getHashtags (s:Status) = s.Entities.HashTagEntities |> Seq.map (fun x -> x.Tag) |> Array.ofSeq
+let getMentions (s:Status) = s.Entities.UserMentionEntities |> Seq.map (fun x -> x.ScreenName) |> Array.ofSeq
 
 [<EntryPoint>]
 let main argv = 
     let docStore = DocumentStore.OpenInitializedStore("RavenDB")
+    docStore.Conventions.MaxNumberOfRequestsPerSession <- 5000
+        
+    use session = docStore.OpenSession()    
+
+    let myTweets = getTweetsByScreenName "kimsk" 20
+                        |> Array.ofSeq 
+                        |> Array.map (fun s -> 
+                            { 
+                                Id = s.StatusID
+                                Text = s.Text
+                                RetweetCount = s.RetweetCount
+                                CreatedAt = s.CreatedAt 
+                                Hashtags = getHashtags s
+                                Mentions = getMentions s
+                            })
+    printfn "%A" myTweets
+
+    // store tweets
+    for tweet in myTweets do store tweet |> run session
     
-    let person1 = { Person.FirstName = "Karlkim"; LastName = "Suwanmongkol";}
-    let person2 = { Id = null; FirstName = "Karlkim"; LastName = "Suwanmongkol";}
+    // query tweets
+
+    let tweets = session.Query<Tweet>().ToArray().Take(5)
     
-    use session = docStore.OpenSession()
-    store person1 |> run session
-    store person2 |> run session
-    let result = [person1;person1] |> List.map (fun p -> (store p |> run session))
-    
-    printfn "%A" result
+    for tweet in tweets do printfn "%s" tweet.Text
 
     0 // return an integer exit code
