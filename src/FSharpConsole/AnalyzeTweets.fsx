@@ -10,11 +10,13 @@ open System.Linq
 open Twitter
 
 let docStore = new DocumentStore(Url = "http://localhost:8080")
+
 docStore.DefaultDatabase <- "RavenDB"
 docStore.Initialize()
 
-let session = docStore.OpenSession()    
+let session = docStore.OpenSession()
+let maxRetweetCount = session.Query<Tweet>().Max(fun t -> t.RetweetCount)
+let tweets = session.Query<Tweet>().Where(fun t -> t.RetweetCount = maxRetweetCount).Take(5).ToArray()
 
-let tweets = session.Query<Tweet>().Take(5).ToArray()
-    
-for tweet in tweets do printfn "%s\r\n" tweet.Text
+for tweet in tweets do
+    printfn "%s\r\n" tweet.Text
