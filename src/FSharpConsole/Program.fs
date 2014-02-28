@@ -43,7 +43,9 @@ let getMentions (s:Status) = s.Entities.UserMentionEntities |> Seq.map (fun x ->
 
 [<EntryPoint>]
 let main argv = 
-    let docStore = DocumentStore.OpenInitializedStore("RavenDB")
+    let docStore = new DocumentStore(Url = "http://localhost:8080")
+    docStore.Initialize() |> ignore
+    docStore.DefaultDatabase <- "RavenDB"
     docStore.Conventions.MaxNumberOfRequestsPerSession <- 5000
         
     use session = docStore.OpenSession()    
@@ -58,15 +60,21 @@ let main argv =
                                 CreatedAt = s.CreatedAt 
                                 Hashtags = getHashtags s
                                 Mentions = getMentions s
+                                ScreenName = s.User.ScreenNameResponse
+                                Name = s.User.Name
                             })
     printfn "%A" myTweets
-
-    // store tweets
-    for tweet in myTweets do store tweet |> run session
+//
+//    // store tweets
+    for tweet in myTweets do 
+        session.Store(tweet)
+        session.SaveChanges()
     
+    
+
     // query tweets
 
-    let tweets = session.Query<Tweet>().ToArray().Take(5)
+    let tweets = session.Query<Tweet>().Take(5).ToArray()
     
     for tweet in tweets do printfn "%s" tweet.Text
 

@@ -10,4 +10,6 @@ type Tweet =
             CreatedAt : DateTime
             Hashtags : string array
             Mentions : string array
+            ScreenName: string
+            Name : string
         }

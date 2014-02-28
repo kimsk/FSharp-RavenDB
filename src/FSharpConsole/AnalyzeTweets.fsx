@@ -1,8 +1,5 @@
-﻿#r @"packages\RavenDB.Client.1.0.992\lib\net40\Raven.Client.Lightweight.dll"
-#r @"packages\RavenDB.Client.1.0.992\lib\net40\Raven.Abstractions.dll"
-#r @"packages\RavenDB.Client.FSharp.1.0.992\lib\net40\Raven.Client.Lightweight.FSharp.dll"
-#r @"packages\NLog.2.0.0.2000\lib\net40\NLog.dll"
-#r @"packages\Newtonsoft.Json.4.0.8\lib\net40\Newtonsoft.Json.dll"
+﻿#r @"packages\RavenDB.Client.2.5.2850\lib\net45\Raven.Client.Lightweight.dll"
+#r @"packages\RavenDB.Client.2.5.2850\lib\net45\Raven.Abstractions.dll"
 #load "Twitter.fs"
 
 open System
@@ -14,11 +11,10 @@ open Twitter
 
 let docStore = new DocumentStore(Url = "http://localhost:8080")
 docStore.DefaultDatabase <- "RavenDB"
-//docStore.Conventions.CustomizeJsonSerializer <- (fun s -> s.Converters.Add(new UnionTypeConverter()))
 docStore.Initialize()
 
 let session = docStore.OpenSession()    
 
-let tweets = session.Query<Tweet>().Take(5)
-
-tweets.First()
+let tweets = session.Query<Tweet>().Take(5).ToArray()
+    
+for tweet in tweets do printfn "%s\r\n" tweet.Text
