@@ -20,3 +20,7 @@ let tweets = session.Query<Tweet>().Where(fun t -> t.RetweetCount = maxRetweetCo
 
 for tweet in tweets do
     printfn "%s\r\n" tweet.Text
+
+let followers = session.Query<Follower>() |> Array.ofSeq
+
+followers |> Seq.where (fun f -> f.ScreenName = "nashdotnet") 

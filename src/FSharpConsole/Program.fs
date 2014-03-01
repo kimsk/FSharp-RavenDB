@@ -51,6 +51,24 @@ let getTweet (s : Status) =
       ScreenName = s.User.ScreenNameResponse
       Name = s.User.Name }
 
+
+let getAllFollowers screenName = 
+    
+    let rec getAllFollowers' acc nextCursor =
+        match nextCursor with
+        | 0L -> acc
+        | next -> 
+            let newFriendship = 
+                    ctx.Friendship
+                        .Where(fun f -> f.Type = FriendshipType.FollowersList && f.ScreenName = screenName && f.Count = 200 && f.Cursor = next)
+                        .Single()
+            let newFollowers = (newFriendship.Users |> List.ofSeq) @ acc
+            let nextCursor = (newFriendship.CursorMovement.Next)
+            printfn "total: %d nextCursor: %d" newFollowers.Length nextCursor
+            getAllFollowers' newFollowers nextCursor
+
+    getAllFollowers' [] -1L
+
 [<EntryPoint>]
 let main argv = 
     let docStore = new DocumentStore(Url = "http://localhost:8080")
@@ -64,10 +82,12 @@ let main argv =
         |> Seq.map getTweet
 
     printfn "%A" myTweets
-        // store tweets
+    
+    // store tweets
     for tweet in myTweets do
         session.Store(tweet)
-        session.SaveChanges()
+
+    session.SaveChanges()
     
     // query tweets
     let tweets = session.Query<Tweet>().Take(5).ToArray()
@@ -75,19 +95,20 @@ let main argv =
         printfn "%s" tweet.Text
 
     // followers
-    let followers = 
-        ctx.Friendship
-            .Where(fun f -> f.Type = FriendshipType.FollowersList && f.ScreenName = "kimsk" && f.Count = 200)
-            .Single()
-            
+
+    let followers = getAllFollowers "kimsk" |> List.map (fun f -> 
+                                            {
+                                                Id = f.ScreenName
+                                                ScreenName = f.ScreenNameResponse
+                                                Name = f.Name
+                                                Location = f.Location
+                                                Description = f.Description
+                                            })
+
+    // store followers
+    for follower in followers do
+        session.Store(follower)
     
-    printfn "%A %A" (followers.Users |> Seq.map (fun f -> f.ScreenNameResponse)) (followers.CursorMovement.Next)             
-
-    let followers' = 
-        ctx.Friendship
-            .Where(fun f -> f.Type = FriendshipType.FollowersList && f.ScreenName = "kimsk" && f.Count = 200 && f.Cursor = followers.CursorMovement.Next)
-            .Single()
-
-    printfn "%A %A" (followers'.Users |> Seq.map (fun f -> f.ScreenNameResponse)) (followers'.CursorMovement.Next)                
+    session.SaveChanges()
 
     0 // return an integer exit code
