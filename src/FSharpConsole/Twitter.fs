@@ -3,7 +3,8 @@
 open System
 
 type Tweet = 
-    { Id : uint64
+    { 
+      StatusId : uint64           
       Text : string
       RetweetCount : int
       CreatedAt : DateTime

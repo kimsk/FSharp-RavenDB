@@ -42,7 +42,7 @@ let getMentions (s : Status) =
     |> Array.ofSeq
 
 let getTweet (s : Status) = 
-    { Id = s.StatusID
+    { StatusId = s.StatusID      
       Text = s.Text
       RetweetCount = s.RetweetCount
       CreatedAt = s.CreatedAt
@@ -50,7 +50,6 @@ let getTweet (s : Status) =
       Mentions = getMentions s
       ScreenName = s.User.ScreenNameResponse
       Name = s.User.Name }
-
 
 let getAllFollowers screenName = 
     
@@ -68,11 +67,12 @@ let getAllFollowers screenName =
             getAllFollowers' newFollowers nextCursor
 
     getAllFollowers' [] -1L
+    
 
 [<EntryPoint>]
-let main argv = 
-    let docStore = new DocumentStore(Url = "http://localhost:8080")
-    docStore.DefaultDatabase <- "RavenDB"
+let main argv =
+    let docStore = new DocumentStore(Url = "http://localhost:8080", DefaultDatabase = "Twitter")
+    docStore.DefaultDatabase <- "Twitter"
     docStore.Initialize() |> ignore
     docStore.Conventions.MaxNumberOfRequestsPerSession <- 5000
     use session = docStore.OpenSession()
@@ -95,7 +95,6 @@ let main argv =
         printfn "%s" tweet.Text
 
     // followers
-
     let followers = getAllFollowers "kimsk" |> List.map (fun f -> 
                                             {
                                                 Id = f.ScreenName
@@ -109,6 +108,22 @@ let main argv =
     for follower in followers do
         session.Store(follower)
     
+    session.SaveChanges()
+
+
+    // add new tweets since last tweet
+    let lastTweet = session.Query<Tweet>().OrderByDescending(fun t -> t.CreatedAt).First()
+    let lastStatusId = lastTweet.StatusId
+    let q = 
+        ctx.Status.Where(fun s -> s.Type = StatusType.User && s.ScreenName = "kimsk" && s.Count = 200 && s.SinceID = lastStatusId)
+        |> Seq.map getTweet
+        |> Seq.sortBy (fun t -> t.CreatedAt)
+        
+    printfn "%A" (q |> Seq.head)
+
+    for tweet in q do
+        session.Store(tweet)
+
     session.SaveChanges()
 
     0 // return an integer exit code

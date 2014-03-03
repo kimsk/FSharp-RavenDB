@@ -9,9 +9,7 @@ open Raven.Client.Linq
 open System.Linq
 open Twitter
 
-let docStore = new DocumentStore(Url = "http://localhost:8080")
-
-docStore.DefaultDatabase <- "RavenDB"
+let docStore = new DocumentStore(Url = "http://localhost:8080", DefaultDatabase = "Twitter")
 docStore.Initialize()
 
 let session = docStore.OpenSession()
@@ -24,3 +22,19 @@ for tweet in tweets do
 let followers = session.Query<Follower>() |> Array.ofSeq
 
 followers |> Seq.where (fun f -> f.ScreenName = "nashdotnet") 
+
+// non retweets
+let nonRetweets = 
+    session.Query<Tweet>()
+        .Where(fun t -> not(t.Text.StartsWith("RT")))
+        .OrderByDescending(fun t -> t.RetweetCount)
+
+nonRetweets.First().Text
+
+let lastTweet = session.Query<Tweet>().OrderByDescending(fun t -> t.CreatedAt).First()
+lastTweet.StatusId, lastTweet.Text
+
+
+
+
+
