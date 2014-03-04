@@ -67,7 +67,62 @@ let getAllFollowers screenName =
             getAllFollowers' newFollowers nextCursor
 
     getAllFollowers' [] -1L
+
+// get search result with specific maxId
+let getSearchResultWithMaxId q num maxId = 
+    query { 
+        for searchResult in ctx.Search do
+            where (searchResult.Type = SearchType.Search)
+            where (searchResult.Query = q)
+            where (searchResult.Count = num)
+            where (searchResult.MaxID = maxId)
+            select searchResult
+            exactlyOne
+    }
+
+let getSearchResultWithSinceId q num sinceId = 
+    query { 
+        for searchResult in ctx.Search do
+            where (searchResult.Type = SearchType.Search)
+            where (searchResult.Query = q)
+            where (searchResult.Count = num)
+            where (searchResult.SinceID = sinceId)
+            select searchResult
+            exactlyOne
+    }
+ 
+// get statuses from number of batches
+let getStatuses q num batches lastMaxId = 
     
+    let getStatuses q maxId = 
+        (getSearchResultWithMaxId q num maxId).Statuses
+        |> List.ofSeq
+        |> List.rev
+    
+    let combinedStatuses (acc : Status list) _ = 
+        let maxId = 
+            if acc = [] then lastMaxId
+            else 
+                (acc
+                 |> List.head
+                 |> (fun s -> s.StatusID)) - 1UL
+        (getStatuses q maxId) @ acc
+    
+    [ 0..batches ] |> List.fold combinedStatuses []
+
+let getAllTweetsFromRavenDB (session:IDocumentSession) q =
+    let rec getTweets (acc:list<Tweet>) count =   
+        let total = acc.Count()     
+        match count with
+        | 0 -> acc
+        | _ -> 
+            let tweets = session.Advanced.LuceneQuery<Tweet>().Where("NOT ScreenName : kimsk AND Hashtags:" + q).Skip(total).ToList() |> List.ofSeq
+            printfn "%d %d" count (tweets.Count())
+            getTweets (tweets@acc) (tweets.Count())
+
+    getTweets [] 1
+
+
 
 [<EntryPoint>]
 let main argv =
@@ -123,6 +178,24 @@ let main argv =
 
     for tweet in q do
         session.Store(tweet)
+
+    session.SaveChanges()
+    
+    let allFSharpTweets = getAllTweetsFromRavenDB session "fsharp"
+    let fsharpSinceId = allFSharpTweets.Max(fun t -> t.StatusId)
+    printfn "%d %A" (allFSharpTweets.Count()) (allFSharpTweets.Where(fun t -> t.StatusId = fsharpSinceId))
+
+    printfn "%A" ((getSearchResultWithSinceId "#fsharp" 1 (fsharpSinceId - 1000UL)).Statuses.First().Text)
+    
+    let fsharpTweets = getStatuses "#fsharp" 100 20 UInt64.MaxValue |> Seq.map getTweet
+    printfn "%A" fsharpTweets
+
+    for tweet in fsharpTweets do
+        if session.Query<Tweet>().Any(fun t -> t.StatusId = tweet.StatusId) then
+            printfn "Duplicated tweet : %d %s" tweet.StatusId tweet.Text
+        else
+            printfn "Add tweet : %d %s" tweet.StatusId tweet.Text
+            session.Store(tweet)
 
     session.SaveChanges()
 
