@@ -52,5 +52,10 @@ let getAllTweetsFromRavenDB q =
 let allFSharpTweets = getAllTweetsFromRavenDB "fsharp"
 allFSharpTweets.Count()
 
+// if follower exist
+session.Query<Follower>().Any(fun f -> f.ScreenName = "nashdotnet")
+
+let isMyFollower screenName =
+    session.Query<Follower>().Any(fun f -> f.ScreenName = screenName)
 
 

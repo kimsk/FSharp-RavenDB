@@ -123,32 +123,7 @@ let getAllTweetsFromRavenDB (session:IDocumentSession) q =
     getTweets [] 1
 
 
-
-[<EntryPoint>]
-let main argv =
-    let docStore = new DocumentStore(Url = "http://localhost:8080", DefaultDatabase = "Twitter")
-    docStore.DefaultDatabase <- "Twitter"
-    docStore.Initialize() |> ignore
-    docStore.Conventions.MaxNumberOfRequestsPerSession <- 5000
-    use session = docStore.OpenSession()
-    
-    let myTweets = 
-        getTweetsByScreenName "kimsk" 20
-        |> Seq.map getTweet
-
-    printfn "%A" myTweets
-    
-    // store tweets
-    for tweet in myTweets do
-        session.Store(tweet)
-
-    session.SaveChanges()
-    
-    // query tweets
-    let tweets = session.Query<Tweet>().Take(5).ToArray()
-    for tweet in tweets do
-        printfn "%s" tweet.Text
-
+let addNewFollowers (session:IDocumentSession) =
     // followers
     let followers = getAllFollowers "kimsk" |> List.map (fun f -> 
                                             {
@@ -159,13 +134,26 @@ let main argv =
                                                 Description = f.Description
                                             })
 
-    // store followers
-    for follower in followers do
+    // store followers    
+    let isMyFollower screenName =
+        session.Query<Follower>().Any(fun f -> f.ScreenName = screenName)
+
+    let addIfNewFollower acc follower =
+        if isMyFollower follower.ScreenName then
+            acc
+        else
+            follower::acc
+
+    let newFollowers = followers |> List.fold addIfNewFollower []
+   
+    for follower in newFollowers do       
         session.Store(follower)
     
+    printfn "%d new followers" newFollowers.Length
     session.SaveChanges()
 
-
+ 
+let addNewTweets (session:IDocumentSession) =
     // add new tweets since last tweet
     let lastTweet = session.Query<Tweet>().OrderByDescending(fun t -> t.CreatedAt).First()
     let lastStatusId = lastTweet.StatusId
@@ -180,7 +168,8 @@ let main argv =
         session.Store(tweet)
 
     session.SaveChanges()
-    
+
+let addNewFSharpTweets (session:IDocumentSession) =
     let allFSharpTweets = getAllTweetsFromRavenDB session "fsharp"
     let fsharpSinceId = allFSharpTweets.Max(fun t -> t.StatusId)
     printfn "%d %A" (allFSharpTweets.Count()) (allFSharpTweets.Where(fun t -> t.StatusId = fsharpSinceId))
@@ -199,4 +188,15 @@ let main argv =
 
     session.SaveChanges()
 
+[<EntryPoint>]
+let main argv =
+    let docStore = new DocumentStore(Url = "http://localhost:8080", DefaultDatabase = "Twitter")
+    docStore.DefaultDatabase <- "Twitter"
+    docStore.Initialize() |> ignore
+    docStore.Conventions.MaxNumberOfRequestsPerSession <- 5000
+    use session = docStore.OpenSession()
+
+    addNewFollowers session
+    addNewTweets session
+    addNewFSharpTweets session
     0 // return an integer exit code
