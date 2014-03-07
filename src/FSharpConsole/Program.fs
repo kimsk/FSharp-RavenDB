@@ -137,38 +137,28 @@ let saveNewFollowers (session:IDocumentSession) =
     let followers = getAllFollowers "kimsk" |> List.map toFollower
 
     // store followers    
-    let isMyFollower screenName =
-        session.Query<Follower>().Any(fun f -> f.ScreenName = screenName)
+    let isMyFollower follower =
+        session.Query<Follower>().Any(fun f -> f.ScreenName = follower.ScreenName)
 
-    let addIfNewFollower acc follower =
-        if isMyFollower follower.ScreenName then
-            acc
-        else
-            follower::acc
+    let newFollowers = followers |> List.filter (isMyFollower >> not)
 
-    let newFollowers = followers |> List.fold addIfNewFollower []
-   
-    for follower in newFollowers do       
-        session.Store(follower)
-    
+    newFollowers |> List.iter (fun f -> 
+            session.Store(f)
+        )
+
     printfn "%d new followers" newFollowers.Length
     session.SaveChanges()
 
 
 let saveNewTweets (session:IDocumentSession) tweetType allTweets = 
-    let isNewTweet statusId =
-        not <| session.Query<Tweet>().Any(fun t -> t.StatusId = statusId)
+    let isNewTweet tweet =
+        not <| session.Query<Tweet>().Any(fun t -> t.StatusId = tweet.StatusId)
 
-    let addIfNewTweet acc tweet =
-        if isNewTweet tweet.StatusId then
-            tweet::acc
-        else
-            acc
-
-    let newTweets = allTweets |> List.fold addIfNewTweet []
-
-    for tweet in newTweets do
-        session.Store(tweet)
+    let newTweets = allTweets |> List.filter isNewTweet
+        
+    newTweets |> List.iter (fun t -> 
+            session.Store(t)
+        )
 
     printfn "%d new %s tweets" newTweets.Length tweetType
     session.SaveChanges()
