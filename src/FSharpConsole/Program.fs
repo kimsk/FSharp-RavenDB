@@ -7,7 +7,7 @@ open Twitter
 open LinqToTwitter
 open TwitterContext
 
-let getTweetsByScreenName screenName batches = 
+let getStatusesByScreenName screenName batches = 
     let getTweets maxId = 
         let tweets = 
             let q = ctx.Status.Where(fun s -> s.Type = StatusType.User && s.ScreenName = screenName && s.Count = 200)
@@ -163,24 +163,46 @@ let saveNewTweets (session:IDocumentSession) tweetType allTweets =
     printfn "%d new %s tweets" newTweets.Length tweetType
     session.SaveChanges()
 
+let saveNewStatuses (session:IDocumentSession) tweetType statuses = 
+    let isNewStatus (status:Status) =
+        not <| session.Query<Status>().Any(fun s -> s.StatusID = status.StatusID)
+
+    let newStatuses = statuses |> List.filter isNewStatus
+        
+    newStatuses |> List.iter (fun s -> 
+            session.Store(s)
+        )
+
+    printfn "%d new %s tweets" newStatuses.Length tweetType
+    session.SaveChanges()
+
 [<EntryPoint>]
 let main argv =
     let docStore = new DocumentStore(Url = "http://localhost:8080", DefaultDatabase = "Twitter")
     docStore.DefaultDatabase <- "Twitter"
     docStore.Initialize() |> ignore
-    docStore.Conventions.MaxNumberOfRequestsPerSession <- 5000
+    docStore.Conventions.MaxNumberOfRequestsPerSession <- 50000
     use session = docStore.OpenSession()
 
     saveNewFollowers session
 
-    let screenName = "kimsk"    
-    (getTweetsByScreenName screenName 5) 
-    |> List.map toTweet
-    |> saveNewTweets session screenName
+    let screenName = "kimsk"
+    let kimskStatuses = getStatusesByScreenName screenName 10
+
+    kimskStatuses
+        |> List.map toTweet
+        |> saveNewTweets session screenName
+
+    kimskStatuses
+        |> saveNewStatuses session screenName
 
     let hashtag = "#fsharp"    
-    getStatuses "#fsharp" 100 20 UInt64.MaxValue 
+    let fSharpStatuses = getStatuses hashtag 100 20 UInt64.MaxValue 
+    fSharpStatuses
         |> List.map toTweet
         |> saveNewTweets session hashtag
+
+    fSharpStatuses
+        |> saveNewStatuses session hashtag
 
     0 // return an integer exit code
